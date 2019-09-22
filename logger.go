@@ -6,12 +6,10 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
-	"github.com/rs/zerolog"
-	"github.com/rs/zerolog/log"
+	"github.com/sirupsen/logrus"
 )
 
 type Config struct {
-	Logger *zerolog.Logger
 	// UTC a boolean stating whether to use UTC time zone or local.
 	UTC            bool
 	SkipPath       []string
@@ -30,13 +28,6 @@ func SetLogger(config ...Config) gin.HandlerFunc {
 		for _, path := range newConfig.SkipPath {
 			skip[path] = struct{}{}
 		}
-	}
-
-	var sublog zerolog.Logger
-	if newConfig.Logger == nil {
-		sublog = log.Logger
-	} else {
-		sublog = *newConfig.Logger
 	}
 
 	return func(c *gin.Context) {
@@ -67,36 +58,32 @@ func SetLogger(config ...Config) gin.HandlerFunc {
 				end = end.UTC()
 			}
 
-			msg := "Request"
+			msg := "[Gin] Request"
 			if len(c.Errors) > 0 {
 				msg = c.Errors.String()
 			}
 
-			dumplogger := sublog.With().
-				Int("status", c.Writer.Status()).
-				Str("method", c.Request.Method).
-				Str("path", path).
-				Str("ip", c.ClientIP()).
-				Dur("latency", latency).
-				Str("user-agent", c.Request.UserAgent()).
-				Logger()
+			dumplogger := logrus.WithFields(logrus.Fields{
+				"status":     c.Writer.Status(),
+				"method":     c.Request.Method,
+				"path":       path,
+				"ip":         c.ClientIP(),
+				"latency":    latency,
+				"user-agent": c.Request.UserAgent(),
+			})
 
 			switch {
 			case c.Writer.Status() >= http.StatusBadRequest && c.Writer.Status() < http.StatusInternalServerError:
 				{
-					dumplogger.Warn().
-						Msg(msg)
+					dumplogger.Warn(msg)
 				}
 			case c.Writer.Status() >= http.StatusInternalServerError:
 				{
-					dumplogger.Error().
-						Msg(msg)
+					dumplogger.Error(msg)
 				}
 			default:
-				dumplogger.Info().
-					Msg(msg)
+				dumplogger.Info(msg)
 			}
 		}
-
 	}
 }
